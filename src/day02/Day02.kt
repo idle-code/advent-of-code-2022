@@ -8,14 +8,20 @@ enum class RPS(val points: Int) {
     Scissors(3)
 }
 
-data class TournamentPair(val opponentChoice: RPS, val myChoice: RPS)
+enum class RoundResult(val points: Int) {
+    Loose(0),
+    Draw(3),
+    Win(6)
+}
+
+data class TournamentPair(val opponentChoice: RPS, val roundResult: RoundResult)
 
 val inputLineRegex = """([ABC]) ([XYZ])""".toRegex()
 
 fun parseInput(inputLines: List<String>): Iterable<TournamentPair> {
     val pairs = mutableListOf<TournamentPair>()
     for (line in inputLines) {
-        val (opponentChoiceLetter, myChoiceLetter) =
+        val (opponentChoiceLetter, roundResultLetter) =
             inputLineRegex.matchEntire(line)
                 ?.destructured
                 ?: throw IllegalArgumentException("Incorrect input line $line")
@@ -27,14 +33,14 @@ fun parseInput(inputLines: List<String>): Iterable<TournamentPair> {
             else -> throw IllegalArgumentException("Incorrect opponent choice $opponentChoiceLetter")
         }
 
-        val myChoice = when (myChoiceLetter) {
-            "X" -> RPS.Rock
-            "Y" -> RPS.Paper
-            "Z" -> RPS.Scissors
-            else -> throw IllegalArgumentException("Incorrect my choice $myChoiceLetter")
+        val roundResult = when (roundResultLetter) {
+            "X" -> RoundResult.Loose
+            "Y" -> RoundResult.Draw
+            "Z" -> RoundResult.Win
+            else -> throw IllegalArgumentException("Incorrect my choice $roundResultLetter")
         }
 
-        pairs.add(TournamentPair(opponentChoice, myChoice))
+        pairs.add(TournamentPair(opponentChoice, roundResult))
     }
 
     return pairs
@@ -43,31 +49,40 @@ fun parseInput(inputLines: List<String>): Iterable<TournamentPair> {
 
 fun main() {
     fun calculateScore(pair: TournamentPair): Int {
-        val resultPoints = when (Pair(pair.opponentChoice, pair.myChoice)) {
-            Pair(RPS.Rock, RPS.Paper), Pair(RPS.Paper, RPS.Scissors), Pair(RPS.Scissors, RPS.Rock) -> 6
-            Pair(RPS.Rock, RPS.Rock), Pair(RPS.Paper, RPS.Paper), Pair(RPS.Scissors, RPS.Scissors) -> 3
-            else -> 0
-        }
+        return when (pair.roundResult) {
+            RoundResult.Loose -> 0 + when (pair.opponentChoice) {
+                RPS.Rock -> RPS.Scissors.points
+                RPS.Paper -> RPS.Rock.points
+                RPS.Scissors -> RPS.Paper.points
+            }
 
-        return resultPoints + pair.myChoice.points
+            RoundResult.Draw -> 3 + pair.opponentChoice.points
+
+            RoundResult.Win -> 6 + when (pair.opponentChoice) {
+                RPS.Rock -> RPS.Paper.points
+                RPS.Paper -> RPS.Scissors.points
+                RPS.Scissors -> RPS.Rock.points
+            }
+        }
     }
 
-    fun part1(input: List<String>): Int {
+//    fun part1(input: List<String>): Int {
+//        val pairs = parseInput(input)
+//        return pairs.sumOf { calculateScore(it) }
+//    }
+
+    fun part2(input: List<String>): Int {
         val pairs = parseInput(input)
         return pairs.sumOf { calculateScore(it) }
     }
 
-    fun part2(input: List<String>): Int {
-        //val pairs = parseInput(input)
-        return 0
-    }
-
     // test if implementation meets criteria from the description, like:
     val testInput = readInput("sample_data", 2)
-    check(part1(testInput) == 15)
+    //check(part1(testInput) == 15)
 
     val input = readInput("main_data", 2)
-    println(part1(input))
+    //println(part1(input))
     check(part2(testInput) == 12)
     println(part2(testInput))
+    println(part2(input))
 }
