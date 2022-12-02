@@ -1,3 +1,7 @@
+package day01
+
+import readInput
+
 data class CalorieEntry(val elfId: Int, val calories: Int)
 
 fun parseInput(inputLines: List<String>): Iterable<CalorieEntry> {
@@ -35,10 +39,10 @@ fun main() {
     }
 
     // test if implementation meets criteria from the description, like:
-    val testInput = readInput("Day01_test")
+    val testInput = readInput("sample_data", 1)
     check(part1(testInput) == 24000)
 
-    val input = readInput("Day01")
+    val input = readInput("main_data", 1)
     println(part1(input))
     println(part2(input))
 }
