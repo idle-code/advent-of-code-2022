@@ -1,16 +1,15 @@
 package day08
 
 import readInput
-import kotlin.math.max
 
 fun main() {
-    fun visibilityHorizontally(input: List<String>, xRange: IntProgression, startVisibility: Int = -1): Array<BooleanArray> {
-        val mask = Array(input.size) { BooleanArray(input[0].length) { false } }
+    fun visibilityHorizontally(input: List<List<Int>>, xRange: IntProgression, startVisibility: Int = -1): Array<BooleanArray> {
+        val mask = Array(input.size) { BooleanArray(input[0].size) { false } }
 
         for (y in 0..input.lastIndex) {
             var previousTreeHeight = startVisibility
             for (x in xRange) {
-                val currentHeight = input[y][x].digitToInt()
+                val currentHeight = input[y][x]
                 if (currentHeight > previousTreeHeight) {
                     mask[y][x] = true
                     previousTreeHeight = currentHeight
@@ -21,13 +20,13 @@ fun main() {
         return mask
     }
 
-    fun visibilityVertically(input: List<String>, yRange: IntProgression, startVisibility: Int = -1): Array<BooleanArray> {
-        val mask = Array(input.size) { BooleanArray(input[0].length) { false } }
+    fun visibilityVertically(input: List<List<Int>>, yRange: IntProgression, startVisibility: Int = -1): Array<BooleanArray> {
+        val mask = Array(input.size) { BooleanArray(input[0].size) { false } }
 
         for (x in 0..input[0].lastIndex) {
             var previousTreeHeight = startVisibility
             for (y in yRange) {
-                val currentHeight = input[y][x].digitToInt()
+                val currentHeight = input[y][x]
                 if (currentHeight > previousTreeHeight) {
                     mask[y][x] = true
                     previousTreeHeight = currentHeight
@@ -52,7 +51,7 @@ fun main() {
         return mergedMask
     }
 
-    fun countVisible(mask: Array<BooleanArray>): Int {
+    fun countAllVisible(mask: Array<BooleanArray>): Int {
         val height = mask.lastIndex
         var visibleCount = 0
         for (y in 0..height) {
@@ -61,62 +60,57 @@ fun main() {
         return visibleCount
     }
 
-    fun printMask(mask: Array<BooleanArray>) {
-        for (y in 0..mask.lastIndex) {
-            for (x in 0..mask[y].lastIndex) {
-                print(if (mask[y][x]) "Y" else "." )
+    fun calculateLineOfSightVertically(
+        input: List<List<Int>>,
+        x: Int,
+        yRange: IntProgression,
+        currentTreeHeight: Int
+    ): Int {
+        var visibleTreeCount = 0
+        for (yy in yRange) {
+            if (input[yy][x] >= currentTreeHeight) {
+                ++visibleTreeCount
+                break
             }
-            println()
+            ++visibleTreeCount
         }
+        return visibleTreeCount
     }
 
-    fun countScenicScore(input: List<String>, x: Int, y: Int): Int {
-        val currentTreeHeight = input[y][x].digitToInt()
-        var visibleToRight = 0
-        for (xx in x+1..input[y].lastIndex) {
-            if (input[y][xx].digitToInt() >= currentTreeHeight) {
-                ++visibleToRight
+    fun calculateLineOfSightHorizontally(
+        input: List<List<Int>>,
+        xRange: IntProgression,
+        y: Int,
+        currentTreeHeight: Int
+    ): Int {
+        var visibleTreeCount = 0
+        for (xx in xRange) {
+            if (input[y][xx] >= currentTreeHeight) {
+                ++visibleTreeCount
                 break
             }
-            ++visibleToRight
+            ++visibleTreeCount
         }
-
-        var visibleToLeft = 0
-        for (xx in x-1 downTo 0) {
-            if (input[y][xx].digitToInt() >= currentTreeHeight) {
-                ++visibleToLeft
-                break
-            }
-            ++visibleToLeft
-        }
-
-        var visibleToBottom = 0
-        for (yy in y+1 ..input.lastIndex) {
-            if (input[yy][x].digitToInt() >= currentTreeHeight) {
-                ++visibleToBottom
-                break
-            }
-            ++visibleToBottom
-        }
-
-        var visibleToTop = 0
-        for (yy in y-1 downTo 0) {
-            if (input[yy][x].digitToInt() >= currentTreeHeight) {
-                ++visibleToTop
-                break
-            }
-            ++visibleToTop
-        }
-
-        return listOf(visibleToRight, visibleToLeft, visibleToBottom, visibleToTop)
-            .foldRight(1) { current, acc -> current * acc }
+        return visibleTreeCount
     }
 
-    fun maxScenicScore(input: List<String>): Int {
+    fun calculateScenicScore(input: List<List<Int>>, x: Int, y: Int): Int {
+        val currentTreeHeight = input[y][x]
+
+        val visibleToLeft = calculateLineOfSightHorizontally(input, x-1 downTo 0, y, currentTreeHeight)
+        val visibleToRight = calculateLineOfSightHorizontally(input, x+1..input[y].lastIndex, y, currentTreeHeight)
+
+        val visibleToTop = calculateLineOfSightVertically(input, x, y - 1 downTo 0, currentTreeHeight)
+        val visibleToBottom = calculateLineOfSightVertically(input, x, y+1 ..input.lastIndex, currentTreeHeight)
+
+        return visibleToRight * visibleToLeft * visibleToBottom * visibleToTop
+    }
+
+    fun maxScenicScore(input: List<List<Int>>): Int {
         var maxScore = 0
         for (y in 0..input.lastIndex) {
             for (x in 0..input[y].lastIndex) {
-                val scenicScore = countScenicScore(input, y, x)
+                val scenicScore = calculateScenicScore(input, y, x)
                 if (scenicScore > maxScore)
                     maxScore = scenicScore
             }
@@ -124,19 +118,19 @@ fun main() {
         return maxScore
     }
 
-    fun part1(input: List<String>): Int {
+    fun part1(rawInput: List<String>): Int {
+        val input = rawInput.map { it.map { char -> char.digitToInt() } }
         val maskFromLeft = visibilityHorizontally(input, 0..input[0].lastIndex)
         val maskFromRight = visibilityHorizontally(input, input[0].lastIndex downTo 0)
         val maskFromTop = visibilityVertically(input, 0..input.lastIndex)
         val maskFromBottom = visibilityVertically(input, input.lastIndex downTo 0)
         val mergedMask = mergeVisibilityMasks(maskFromLeft, maskFromRight, maskFromTop, maskFromBottom)
-        //printMask(maskFromBottom)
 
-        return countVisible(mergedMask)
+        return countAllVisible(mergedMask)
     }
 
-
-    fun part2(input: List<String>): Int {
+    fun part2(rawInput: List<String>): Int {
+        val input = rawInput.map { it.map { char -> char.digitToInt() } }
         return maxScenicScore(input)
     }
 
