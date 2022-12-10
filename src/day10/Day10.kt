@@ -1,54 +1,72 @@
 package day10
 
 import logEnabled
+import logln
 import readInput
 
 private const val DAY_NUMBER = 10
 
+private const val SCREEN_WIDTH = 40
 
-data class Operation(val opcode: String, val arg: Int? = null)
+data class Operation(val opcode: String, val cost: Int, val arg: Int? = null)
 
 class Simulator {
-    var registerX = 1
+    private var registerX = 1
 
-    var currentCycle = 0
+    private var currentCycle = 0
 
-    val breakpointValues = ArrayList<Pair<Int, Int>>()
+    val watchValues = ArrayList<Pair<Int, Int>>()
 
-    private val breakpoints = HashSet<Int>()
+    private val watchPoints = HashSet<Int>()
 
-    fun addBreakpoint(cycle: Int) {
-        breakpoints.add(cycle)
+    private val screen = Array(SCREEN_WIDTH * 6) { false }
+
+    private val spriteRange: IntRange
+        get() = IntRange(registerX - 1, registerX + 1)
+
+    fun addWatch(cycle: Int) {
+        watchPoints.add(cycle)
     }
 
     fun execute(operations: List<Operation>) {
         for (operation in operations) {
-            if (currentCycle > 218)
-                currentCycle += 0
             execute(operation)
         }
     }
 
-    private fun breakpoint(currentInstructionCycleCost: Int) {
-        for (cycle in currentCycle+1 ..currentCycle + currentInstructionCycleCost) {
-            if (cycle in breakpoints)
-                breakpointValues.add(Pair(cycle, registerX))
+    private fun execute(operation: Operation) {
+        updateScreen(operation.cost)
+        updateWatch(operation.cost)
+        currentCycle += operation.cost
+
+        when (operation.opcode) {
+            "noop" -> Unit
+            "addx" -> registerX += operation.arg!!
+            else -> throw IllegalArgumentException("Unknown opcode: ${operation.opcode}")
         }
     }
 
-    fun execute(operation: Operation) {
-        when (operation.opcode) {
-            "noop" -> {
-                breakpoint(1)
-                currentCycle += 1
-            }
-            "addx" -> {
-                breakpoint(2)
-                registerX += operation.arg!!
-                currentCycle += 2
-            }
-            else -> throw IllegalArgumentException("Unknown opcode: ${operation.opcode}")
+    private fun updateWatch(currentInstructionCycleCost: Int) {
+        for (cycle in currentCycle+1 ..currentCycle + currentInstructionCycleCost) {
+            if (cycle in watchPoints)
+                watchValues.add(cycle to registerX)
         }
+    }
+
+    private fun updateScreen(currentInstructionCycleCost: Int) {
+        for (offset in 0 until currentInstructionCycleCost) {
+            if ((currentCycle + offset) % SCREEN_WIDTH in spriteRange)
+                screen[currentCycle + offset] = true
+        }
+    }
+
+    fun printScreen() {
+        for (y in 0..5) {
+            for (x in 0 until SCREEN_WIDTH)
+                print(if (screen[y* SCREEN_WIDTH + x]) '#' else '.')
+            println()
+        }
+        println()
     }
 }
 
@@ -57,12 +75,10 @@ fun main() {
         val program = ArrayList<Operation>()
         for (line in rawInput) {
             if (line.startsWith("noop"))
-                program.add(Operation(line))
+                program.add(Operation("noop", 1))
             else {
-                val operation = line.substringBefore(' ')
                 val arg = line.substringAfter(' ')
-
-                program.add(Operation(operation, arg.toInt()))
+                program.add(Operation("addx", 2, arg.toInt()))
             }
         }
         return program
@@ -73,16 +89,20 @@ fun main() {
         val checkpoints = listOf(20, 60, 100, 140, 180, 220)
         val simulator = Simulator()
         for (point in checkpoints)
-            simulator.addBreakpoint(point)
+            simulator.addWatch(point)
         simulator.execute(program)
-        for (kv in simulator.breakpointValues) {
-            println("Cycle ${kv.first}*${kv.second} = ${kv.first * kv.second}")
+        for (cycleToValue in simulator.watchValues) {
+            logln("Cycle ${cycleToValue.first}*${cycleToValue.second} = ${cycleToValue.first * cycleToValue.second}")
         }
-        val signalStrength = simulator.breakpointValues.map { it.first * it.second }.sum()
+        val signalStrength = simulator.watchValues.sumOf { it.first * it.second }
         return signalStrength
     }
 
     fun part2(rawInput: List<String>): Int {
+        val program = parseProgram(rawInput)
+        val simulator = Simulator()
+        simulator.execute(program)
+        simulator.printScreen()
         return 0
     }
 
@@ -97,13 +117,13 @@ fun main() {
 
     val part1MainResult = part1(mainInput)
     println(part1MainResult)
-//    check(part1MainResult == 0)
-//
-//    val part2SampleResult = part2(sampleInput)
+    check(part1MainResult == 14320)
+
+    val part2SampleResult = part2(sampleInput)
 //    println(part2SampleResult)
 //    check(part2SampleResult == 0)
-//
-//    val part2MainResult = part2(mainInput)
+
+    val part2MainResult = part2(mainInput)
 //    println(part2MainResult)
 //    check(part2MainResult == 0)
 }
