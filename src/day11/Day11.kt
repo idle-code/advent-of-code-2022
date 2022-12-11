@@ -1,25 +1,24 @@
 package day11
 
 import logEnabled
-import logln
 import readInput
 
 private const val DAY_NUMBER = 11
 
-typealias WorryLevel = Int
+typealias WorryLevel = Long
 typealias MonkeyId = Int
 
 class Monkey(
     val id: MonkeyId,
     startingItems: List<WorryLevel>,
     private val operation: Operation,
-    private val test: TestOperation,
+    val test: TestOperation,
     private val successTarget: MonkeyId,
     private val failureTarget: MonkeyId
 ) {
     val items: MutableList<WorryLevel> = startingItems.toMutableList()
 
-    var inspectionCounter: Int = 0
+    var inspectionCounter: Long = 0
 
     class Operation(private val left: String, private val op: String, private val right: String) {
         fun run(level: WorryLevel): WorryLevel {
@@ -36,27 +35,25 @@ class Monkey(
             return if (token == "old")
                 oldValue
             else
-                token.toInt()
+                token.toLong()
         }
 
         override fun toString(): String = "new = $left $op $right"
     }
 
-    class TestOperation(private val number: Int) {
-        fun run(testedValue: Int): Boolean {
-            return testedValue % number == 0
+    class TestOperation(val number: Long) {
+        fun run(testedValue: WorryLevel): Boolean {
+            return testedValue % number == 0L
         }
 
         override fun toString(): String = "divisible by $number"
     }
 
-    fun inspect(level: WorryLevel): Pair<WorryLevel, MonkeyId> {
+    fun inspect(level: WorryLevel, worryLevelDecreaser: (WorryLevel) -> WorryLevel): Pair<WorryLevel, MonkeyId> {
         ++inspectionCounter
 
         var newLevel = operation.run(level)
-//        logln("    Worry level increases to $newLevel.")
-        newLevel /= 3
-//        logln("    Monkey gets bored with item. Worry level is divided by 3 to $newLevel.")
+        newLevel = worryLevelDecreaser(newLevel)
         return if (test.run(newLevel))
             newLevel to successTarget
         else
@@ -76,13 +73,13 @@ class Monkey(
 fun main() {
     fun parseMonkey(iterator: Iterator<String>): Monkey {
         val monkeyId = iterator.next().substringAfter("Monkey ").substringBefore(':').toInt()
-        val startingItems = iterator.next().substringAfter("  Starting items: ").split(", ").map { it.toInt() }
+        val startingItems = iterator.next().substringAfter("  Starting items: ").split(", ").map { it.toLong() }
 
         val expr = iterator.next().substringAfter("  Operation: new = ")
         val (left, op, right) = expr.split(' ')
         val operation = Monkey.Operation(left, op, right)
 
-        val testOperation = Monkey.TestOperation(iterator.next().substringAfter("  Test: divisible by ").toInt())
+        val testOperation = Monkey.TestOperation(iterator.next().substringAfter("  Test: divisible by ").toLong())
         val successTarget = iterator.next().substringAfter("    If true: throw to monkey ").toInt()
         val failureTarget = iterator.next().substringAfter("    If false: throw to monkey ").toInt()
 
@@ -101,72 +98,59 @@ fun main() {
         return monkeys
     }
 
-    fun simulateRound(monkeys: List<Monkey>) {
+    fun simulateRound(monkeys: List<Monkey>, worryLevelDecreaser: (WorryLevel) -> WorryLevel) {
         for (monkey in monkeys) {
-//            logln("Monkey ${monkey.id}:")
             while (monkey.items.isNotEmpty()) {
                 val itemLevel = monkey.items.removeFirst()
-//                logln("  Monkey inspects an item with a worry level of $itemLevel.")
-                val (newItemLevel, targetMonkey) = monkey.inspect(itemLevel)
-//                logln("    Item with worry level $newItemLevel is thrown to monkey $targetMonkey.")
+                val (newItemLevel, targetMonkey) = monkey.inspect(itemLevel, worryLevelDecreaser)
                 monkeys[targetMonkey].items.add(newItemLevel)
             }
         }
     }
 
-    fun part1(rawInput: List<String>): Int {
-        val monkeys = parseInput(rawInput)
-
-        for (round in 1..20) {
-            logln("Round $round")
-            simulateRound(monkeys)
-        }
-
-        for (monkey in monkeys) {
-            logln("Monkey ${monkey.id} inspected items ${monkey.inspectionCounter} times.")
-        }
+    fun calculateMonkeyBusiness(monkeys: List<Monkey>): Long {
         val monkeyInspections = monkeys.map { it.inspectionCounter }.sortedDescending()
         return monkeyInspections[0] * monkeyInspections[1]
     }
 
-    fun part2(rawInput: List<String>): Int {
+    fun part1(rawInput: List<String>): Long {
         val monkeys = parseInput(rawInput)
 
-        val testRound = listOf(1, 20, 1000, 2000)
-        for (round in 1..10000) {
-//            logln("Round $round")
-            simulateRound(monkeys)
-
-            if (round in testRound) {
-                logln("== After round $round ==")
-                for (monkey in monkeys) {
-                    logln("Monkey ${monkey.id} inspected items ${monkey.inspectionCounter} times.")
-                }
-            }
+        for (round in 1..20) {
+            simulateRound(monkeys) { level -> level / 3 }
         }
 
-        val monkeyInspections = monkeys.map { it.inspectionCounter }.sortedDescending()
-        return monkeyInspections[0] * monkeyInspections[1]
+        return calculateMonkeyBusiness(monkeys)
+    }
+
+    fun part2(rawInput: List<String>): Long {
+        val monkeys = parseInput(rawInput)
+        val leastCommonMultiplier = monkeys.map { it.test.number }.reduce { acc, l -> acc * l }
+        for (round in 1..10000) {
+            simulateRound(monkeys) { level -> level % leastCommonMultiplier }
+        }
+
+        return calculateMonkeyBusiness(monkeys)
     }
 
     val sampleInput = readInput("sample_data", DAY_NUMBER)
     val mainInput = readInput("main_data", DAY_NUMBER)
 
-    logEnabled = true
+    logEnabled = false
 
-//    val part1SampleResult = part1(sampleInput)
-//    println(part1SampleResult)
-//    check(part1SampleResult == 10605)
-//
-//    val part1MainResult = part1(mainInput)
-//    println(part1MainResult)
-//    check(part1MainResult == 66802)
+    val part1SampleResult = part1(sampleInput)
+    println(part1SampleResult)
+    check(part1SampleResult == 10605L)
+
+    val part1MainResult = part1(mainInput)
+    println(part1MainResult)
+    check(part1MainResult == 66802L)
 
     val part2SampleResult = part2(sampleInput)
     println(part2SampleResult)
-//    check(part2SampleResult == 0)
+    check(part2SampleResult == 2713310158)
 
-//    val part2MainResult = part2(mainInput)
-//    println(part2MainResult)
-//    check(part2MainResult == 0)
+    val part2MainResult = part2(mainInput)
+    println(part2MainResult)
+    check(part2MainResult == 21800916620)
 }
