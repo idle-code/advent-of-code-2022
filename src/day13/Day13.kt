@@ -54,6 +54,7 @@ fun tokenize(expr: String): List<String> {
             builder = StringBuilder()
         }
     }
+    
     for (c in expr) {
         when (c) {
             '[' -> tokenList.add(c.toString())
@@ -70,7 +71,7 @@ fun tokenize(expr: String): List<String> {
     return tokenList
 }
 
-class Packet {
+class Packet : Comparable<Packet> {
     private var value: Int? = null
 
     private var elements: MutableList<Packet>? = null
@@ -79,8 +80,8 @@ class Packet {
         value = constant
     }
 
-    constructor() {
-        elements = mutableListOf()
+    constructor(innerPackets: List<Packet> = listOf()) {
+        elements = innerPackets.toMutableList()
     }
 
     override fun toString(): String {
@@ -93,7 +94,13 @@ class Packet {
         elements!!.add(packet)
     }
 
-    operator fun compareTo(right: Packet): Int {
+    override fun equals(other: Any?): Boolean {
+        if (other !is Packet)
+            return false
+        return this.compareTo(other) == 0
+    }
+
+    override operator fun compareTo(right: Packet): Int {
         val leftValue = value
         val rightValue = right.value
         if (leftValue != null && rightValue != null) {
@@ -104,7 +111,7 @@ class Packet {
         val rightElements = right.elements ?: mutableListOf(right)
         val elementPairs = leftElements.zip(rightElements)
         for (pair in elementPairs) {
-            if (pair.first.compareTo(pair.second) != 0) {
+            if (pair.first != pair.second) {
                 return pair.first.compareTo(pair.second)
             }
         }
@@ -127,7 +134,13 @@ fun main() {
     }
 
     fun part2(rawInput: List<String>): Int {
-        return 0
+        val pairList = parseFile(rawInput)
+        val firstKeyPacket = Packet(listOf(Packet(listOf(Packet(2)))))
+        val secondKeyPacket = Packet(listOf(Packet(listOf(Packet(6)))))
+
+        val flatList = pairList.flatMap { listOf(it.first, it.second) }
+        val sortedFlatList = (flatList + listOf(firstKeyPacket, secondKeyPacket)).sorted()
+        return (1 + sortedFlatList.indexOf(firstKeyPacket)) * (1 + sortedFlatList.indexOf(secondKeyPacket))
     }
 
     val sampleInput = readInput("sample_data", DAY_NUMBER)
@@ -143,11 +156,11 @@ fun main() {
     println(part1MainResult)
     check(part1MainResult == 5330)
 
-//    val part2SampleResult = part2(sampleInput)
-//    println(part2SampleResult)
-//    check(part2SampleResult == 0)
+    val part2SampleResult = part2(sampleInput)
+    println(part2SampleResult)
+    check(part2SampleResult == 140)
 
-//    val part2MainResult = part2(mainInput)
-//    println(part2MainResult)
-//    check(part2MainResult == 0)
+    val part2MainResult = part2(mainInput)
+    println(part2MainResult)
+    check(part2MainResult == 27648)
 }
