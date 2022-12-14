@@ -5,6 +5,7 @@ import log
 import logEnabled
 import logln
 import readInput
+import kotlin.math.max
 
 private const val DAY_NUMBER = 14
 
@@ -72,6 +73,13 @@ fun fillWithRocks(fallMap: Array<Array<SpaceType>>, rockLines: List<Line>) {
     }
 }
 
+fun addFloor(fallMap: Array<Array<SpaceType>>) {
+    val width = fallMap[0].size
+    val y = fallMap.lastIndex
+    for (x in 0 until width)
+        fallMap[y][x] = SpaceType.Rock
+}
+
 private fun Array<Array<SpaceType>>.print() {
     logln("")
     for (y in 0..this.lastIndex) {
@@ -127,10 +135,29 @@ fun main() {
         }
         fallMap.print()
         return fallenGrains
+
     }
 
     fun part2(rawInput: List<String>): Int {
-        return 0
+        val rockLines = parseFile(rawInput)
+        val maxY = rockLines.maxOf { lines -> lines.maxOf { line -> kotlin.math.max(line.start.y, line.end.y) } }
+        var maxX = rockLines.maxOf { lines -> lines.maxOf { line -> kotlin.math.max(line.start.x, line.end.x) } }
+        maxX = max(maxX, 500 + maxY)
+        val fallMap = Array(maxY + 1 + 2) { Array(maxX + 10) { SpaceType.Air } }
+        fillWithRocks(fallMap, rockLines.flatten())
+        addFloor(fallMap)
+        fallMap.print()
+        var fallenGrains = 0
+        while (true) {
+            val restPosition = fallMap.dropSandAt(sandStart)!!
+            if (restPosition == sandStart)
+                break
+            fallMap[restPosition.y][restPosition.x] = SpaceType.Sand
+            ++fallenGrains
+//            fallMap.print()
+        }
+        fallMap.print()
+        return fallenGrains + 1
     }
 
     val sampleInput = readInput("sample_data", DAY_NUMBER)
@@ -138,19 +165,19 @@ fun main() {
 
     logEnabled = true
 
-    val part1SampleResult = part1(sampleInput)
-    println(part1SampleResult)
-    check(part1SampleResult == 24)
+//    val part1SampleResult = part1(sampleInput)
+//    println(part1SampleResult)
+//    check(part1SampleResult == 24)
+//
+//    val part1MainResult = part1(mainInput)
+//    println(part1MainResult)
+//    check(part1MainResult == 961)
 
-    val part1MainResult = part1(mainInput)
-    println(part1MainResult)
-    check(part1MainResult == 961)
+    val part2SampleResult = part2(sampleInput)
+    println(part2SampleResult)
+    check(part2SampleResult == 93)
 
-//    val part2SampleResult = part2(sampleInput)
-//    println(part2SampleResult)
-//    check(part2SampleResult == 0)
-
-//    val part2MainResult = part2(mainInput)
-//    println(part2MainResult)
+    val part2MainResult = part2(mainInput)
+    println(part2MainResult)
 //    check(part2MainResult == 0)
 }
