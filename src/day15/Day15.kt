@@ -1,21 +1,33 @@
 package day15
 
 import Position
+import logln
 import logEnabled
 import readInput
+import java.lang.IllegalStateException
+import java.lang.Math.abs
 
 private const val DAY_NUMBER = 15
 
 data class Sensor(val sensorPosition: Position, val beaconPosition: Position) {
-    private val distanceToBeacon: Int get() = sensorPosition.manhattanDistanceTo(beaconPosition)
+    private val distanceToBeacon: Int = sensorPosition.manhattanDistanceTo(beaconPosition)
 
-    val xSensingRange: IntRange
-        get() = IntRange(
-            sensorPosition.x - distanceToBeacon,
-            sensorPosition.x + distanceToBeacon
+    val xSensingRange: IntRange = IntRange(
+        sensorPosition.x - distanceToBeacon,
+        sensorPosition.x + distanceToBeacon
+    )
+
+    fun couldSenseAt(position: Position): Boolean = sensorPosition.manhattanDistanceTo(position) <= distanceToBeacon
+
+    fun senseRangeAt(y: Int): IntRange? {
+        val yOffset = kotlin.math.abs(sensorPosition.y - y)
+        if (yOffset > distanceToBeacon)
+            return null
+        return IntRange(
+            sensorPosition.x - (distanceToBeacon - yOffset),
+            sensorPosition.x + (distanceToBeacon - yOffset)
         )
-
-    fun couldSense(position: Position): Boolean = sensorPosition.manhattanDistanceTo(position) <= distanceToBeacon
+    }
 }
 
 val sensorLineRegex = """Sensor at x=(-?\d+), y=(-?\d+): closest beacon is at x=(-?\d+), y=(-?\d+)""".toRegex()
@@ -24,6 +36,18 @@ fun parseSensor(line: String): Sensor {
     val (sensorX, sensorY, beaconX, beaconY) = sensorLineRegex.matchEntire(line)?.destructured
         ?: throw IllegalArgumentException("Invalid input line: $line")
     return Sensor(Position(sensorX.toInt(), sensorY.toInt()), Position(beaconX.toInt(), beaconY.toInt()))
+}
+
+private fun List<IntRange>.isSingleRange(): Boolean {
+    val sortedRanges = this.sortedBy { it.first }
+    var lastRange = sortedRanges.first()
+    for (range in sortedRanges.drop(1)) {
+        if (range.first !in lastRange)
+            return false
+        if (range.last !in lastRange)
+            lastRange = range
+    }
+    return true
 }
 
 
@@ -37,15 +61,31 @@ fun main() {
         for (sensor in sensors) {
             for (x in minX..maxX) {
                 val candidate = Position(x, y)
-                if (sensor.couldSense(candidate) && candidate != sensor.beaconPosition)
+                if (sensor.couldSenseAt(candidate) && candidate != sensor.beaconPosition)
                     emptyPositions.add(candidate)
             }
         }
         return emptyPositions.size
     }
 
-    fun part2(rawInput: List<String>): Int {
-        return 0
+    fun part2(rawInput: List<String>, maxCoordinate: Int): Long {
+        val sensors = rawInput.map { parseSensor(it) }
+        for (y in 0..maxCoordinate) {
+            val isRowCovered = sensors.mapNotNull { s -> s.senseRangeAt(y) }.isSingleRange()
+            if (isRowCovered)
+                continue
+            // Scan row for actual signal
+            nextXCoordinate@ for (x in 0..maxCoordinate) {
+                for (sensor in sensors) {
+                    val candidate = Position(x, y)
+                    if (sensor.couldSenseAt(candidate)) {
+                        continue@nextXCoordinate
+                    }
+                }
+                return x * 4000000L + y
+            }
+        }
+        throw IllegalStateException("Distress signal tuning not found")
     }
 
     val sampleInput = readInput("sample_data", DAY_NUMBER)
@@ -61,13 +101,13 @@ fun main() {
     println(part1MainResult)
     check(part1MainResult == 4748135)
 
-//    val part2SampleResult = part2(sampleInput)
-//    println(part2SampleResult)
-//    check(part2SampleResult == 93)
-//
-//    val part2MainResult = part2(mainInput)
-//    println(part2MainResult)
-//    check(part2MainResult == 0)
+    val part2SampleResult = part2(sampleInput, 20)
+    println(part2SampleResult)
+    check(part2SampleResult == 56000011L)
+
+    val part2MainResult = part2(mainInput, 4000000)
+    println(part2MainResult)
+    check(part2MainResult == 13743542639657)
 }
 
 
