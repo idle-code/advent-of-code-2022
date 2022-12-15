@@ -1,6 +1,6 @@
 package day14
 
-import day12.Position
+import Position
 import log
 import logEnabled
 import logln
@@ -43,10 +43,10 @@ fun parseSegments(line: String): List<Line> {
     }
     val rockSegments = mutableListOf<Line>()
     for (i in 1..pointsInRockLine.lastIndex) {
-        if (pointsInRockLine[i-1] < pointsInRockLine[i])
-            rockSegments.add(Line(pointsInRockLine[i-1], pointsInRockLine[i]))
+        if (pointsInRockLine[i - 1] < pointsInRockLine[i])
+            rockSegments.add(Line(pointsInRockLine[i - 1], pointsInRockLine[i]))
         else
-            rockSegments.add(Line(pointsInRockLine[i], pointsInRockLine[i-1]))
+            rockSegments.add(Line(pointsInRockLine[i], pointsInRockLine[i - 1]))
     }
     return rockSegments
 }

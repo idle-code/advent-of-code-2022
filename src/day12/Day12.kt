@@ -1,23 +1,14 @@
 package day12
 
+import Position
 import log
 import logEnabled
 import logln
 import readInput
-import kotlin.collections.ArrayDeque
 
 private const val DAY_NUMBER = 12
 
 typealias Height = Char
-
-data class Position(val x: Int, val y: Int) {
-    operator fun compareTo(other: Position): Int {
-        val xCompare = this.x.compareTo(other.x)
-        if (xCompare != 0)
-            return xCompare
-        return this.y.compareTo(other.y)
-    }
-}
 
 private const val NOT_VISITED = -1
 
