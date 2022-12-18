@@ -30,11 +30,22 @@ private fun Board.freeRowsFromTop(): Int {
     return this.height
 }
 
-private val Board.occupiedHeight: Int get() {
-    return this.height - this.freeRowsFromTop()
+private fun Board.bulkheadHeight(): Int? {
+    for (y in this.lastIndex downTo 0) {
+        if (this[y].all { it })
+            return this.height - y
+    }
+    return null
 }
 
+private val Board.occupiedHeight: Int
+    get() {
+        return this.height - this.freeRowsFromTop()
+    }
+
 private fun Board.print() {
+    if (!logEnabled)
+        return
     for (y in 0 until this.height) {
         for (x in 0 until this.width) {
             if (this[y][x])
@@ -47,8 +58,9 @@ private fun Board.print() {
     logln("$$$$$$$$$$$$$$")
 }
 
-
 private fun Board.printWith(block: Block) {
+    if (!logEnabled)
+        return
     for (y in 0 until this.height) {
         for (x in 0 until this.width) {
             val positionInBlock = Position(x, y) - block.position
@@ -69,30 +81,26 @@ private fun Board.printWith(block: Block) {
     logln("-----------------")
 }
 
-private fun <T> Sequence<T>.repeat(): Sequence<T> = sequence { while (true) { yieldAll(this@repeat) } }
+private fun <T> Sequence<T>.repeat(): Sequence<T> = sequence {
+    while (true) {
+        yieldAll(this@repeat)
+    }
+}
 
 class Block(val mask: Array<Array<Boolean>>) {
     var position = Position(0, 0)
 
     val width: Int get() = mask[0].size
+
     val height: Int get() = mask.size
 
-    fun moveLeft(board: Board) {
-        val newPosition = Position(position.x - 1, position.y)
-        if (!canMove(board, newPosition))
-            return
-        position = newPosition
-    }
+    fun moveLeft(board: Board) = move(board, Position(position.x - 1, position.y))
 
-    fun moveRight(board: Board) {
-        val newPosition = Position(position.x + 1, position.y)
-        if (!canMove(board, newPosition))
-            return
-        position = newPosition
-    }
+    fun moveRight(board: Board) = move(board, Position(position.x + 1, position.y))
 
-    fun moveDown(board: Board): Boolean {
-        val newPosition = Position(position.x, position.y + 1)
+    fun moveDown(board: Board) = move(board, Position(position.x, position.y + 1))
+
+    private fun move(board: Board, newPosition: Position): Boolean {
         if (!canMove(board, newPosition))
             return false
         position = newPosition
@@ -126,7 +134,6 @@ class Block(val mask: Array<Array<Boolean>>) {
     }
 }
 
-
 private fun String.toMask(): Array<Array<Boolean>> {
     val lines = this.lines()
     val height = lines.size
@@ -143,6 +150,7 @@ private fun String.toMask(): Array<Array<Boolean>> {
     }
     return mask
 }
+
 val horizontalBlock = Block("####".toMask())
 val crossBlock = Block(".#.\n###\n.#.".toMask())
 val angleBlock = Block("..#\n..#\n###".toMask())
@@ -152,17 +160,19 @@ val squareBlock = Block("##\n##".toMask())
 
 val availableBlocks = sequenceOf(horizontalBlock, crossBlock, angleBlock, verticalBlock, squareBlock)
 
+
 fun main() {
-    fun part1(rawInput: List<String>): Int {
+    fun simulate(steamDirections: Sequence<Char>, iterationCount: Long): Int {
         val board = Board()
         board.addTopRows(4)
         check(board.occupiedHeight == 0)
 
-        val steamDirections = rawInput.first()
-        val steamGusts = steamDirections.asSequence().repeat().iterator()
+        val steamGusts = steamDirections.repeat().iterator()
         val blocks = availableBlocks.repeat().iterator()
-        val startPosition = Position(2, 0)
-        for (round in 1..2022) {
+
+//        val heights = Array(iterationCount.toInt()) { 0 }
+
+        for (round in 1..iterationCount) {
             // Place block at the top
             val block = blocks.next()
             val requiredHeight = block.height + 3 + board.occupiedHeight
@@ -190,13 +200,33 @@ fun main() {
                     break
                 }
             }
+
+//            heights[round.toInt() - 1] = board.occupiedHeight
         }
+
+//        val differences = heights.drop(1).mapIndexed { index, h -> h - heights[index] }
+//        differences.forEach { print("$it ") }
 
         return board.occupiedHeight
     }
 
-    fun part2(rawInput: List<String>): Int {
-        return 0
+    fun part1(rawInput: List<String>): Int {
+        val steamDirections = rawInput.first().asSequence()
+        return simulate(steamDirections, 2022)
+    }
+
+    fun part2(rawInput: List<String>, repeatingSubsequenceLength: Int): Long {
+        val maxIterations = 1_000_000_000_000
+        val loopDifference =
+            simulate(rawInput.first().asSequence(), (repeatingSubsequenceLength * 6).toLong()) - simulate(
+                rawInput.first().asSequence(), (repeatingSubsequenceLength * 5).toLong()
+            )
+
+        val requiredEndIterations = maxIterations % repeatingSubsequenceLength + repeatingSubsequenceLength
+        return simulate(
+            rawInput.first().asSequence(),
+            requiredEndIterations
+        ) + (maxIterations / repeatingSubsequenceLength - 1) * loopDifference
     }
 
     val sampleInput = readInput("sample_data", DAY_NUMBER)
@@ -210,15 +240,14 @@ fun main() {
 
     val part1MainResult = part1(mainInput)
     println(part1MainResult)
-//    check(part1MainResult == 0)
+    check(part1MainResult == 3175)
 
-//    val part2SampleResult = part2(sampleInput)
-//    println(part2SampleResult)
-//    check(part2SampleResult == 0)
+    // FIXME: Find a way to calculate repeatingSubsequenceLength (signal processing?)
+    val part2SampleResult = part2(sampleInput, 35)
+    println(part2SampleResult)
+    check(part2SampleResult == 1514285714288)
 
-//    val part2MainResult = part2(mainInput)
-//    println(part2MainResult)
-//    check(part2MainResult == 0)
+    val part2MainResult = part2(mainInput, 1760)
+    println(part2MainResult)
+    check(part2MainResult == 1555113636385)
 }
-
-
