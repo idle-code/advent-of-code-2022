@@ -1,8 +1,6 @@
 package day18
 
 import logEnabled
-import logln
-import log
 import readInput
 
 private const val DAY_NUMBER = 18
@@ -26,37 +24,123 @@ data class Position3D(val x: Int, val y: Int, val z: Int) {
             return Position3D(x.toInt(), y.toInt(), z.toInt())
         }
     }
+
+    operator fun minus(other: Position3D): Position3D {
+        return Position3D(x - other.x, y - other.y, z - other.z)
+    }
+
+    operator fun plus(other: Position3D): Position3D {
+        return Position3D(x + other.x, y + other.y, z + other.z)
+    }
 }
 
 class PointCloud {
-    private val voxelMap = mutableSetOf<Position3D>()
+    private val voxelSet = mutableSetOf<Position3D>()
 
-    fun add(voxelPosition: Position3D) {
-        voxelMap.add(voxelPosition)
+    val positions: Sequence<Position3D> = voxelSet.asSequence()
+
+    private val visitedSet = mutableSetOf<Position3D>()
+
+    fun add(position: Position3D) {
+        voxelSet.add(position)
+    }
+
+    fun remove(position: Position3D) {
+        voxelSet.remove(position)
+    }
+
+    fun boundingBox(): Pair<Position3D, Position3D> {
+        val minX = voxelSet.minOf { it.x }
+        val minY = voxelSet.minOf { it.y }
+        val minZ = voxelSet.minOf { it.z }
+        val maxX = voxelSet.maxOf { it.x }
+        val maxY = voxelSet.maxOf { it.y }
+        val maxZ = voxelSet.maxOf { it.z }
+        return Pair(Position3D(minX, minY, minZ), Position3D(maxX, maxY, maxZ))
     }
 
     fun calculateSurfaceArea(): Int {
         var totalFreeSides = 0
-        for (voxel in voxelMap) {
+        for (voxel in voxelSet) {
             for (neighbour in voxel.neighbours) {
-                if (neighbour !in voxelMap)
+                if (neighbour !in voxelSet)
                     ++totalFreeSides
             }
         }
         return totalFreeSides
     }
+
+    fun visitConnectedTo(position: Position3D) {
+        val toVisit = ArrayDeque(listOf(position))
+        while (toVisit.isNotEmpty()) {
+            val visited = toVisit.removeFirst()
+            if (visitedSet.add(visited))
+                toVisit.addAll(visited.neighbours.filter { n -> n in voxelSet && n !in visitedSet })
+        }
+    }
+
+    fun removeUnvisited() {
+        val unvisitedPositions = positions.filter { it !in visitedSet }.toList()
+        voxelSet.removeAll(unvisitedPositions.toSet())
+    }
+}
+
+
+private fun Pair<Position3D, Position3D>.calculateSurfaceArea(): Int {
+    val min = this.first
+    val max = this.second + Position3D(1, 1, 1)
+    check(max.x > min.x)
+    check(max.y > min.y)
+    check(max.z > min.z)
+    val xSide = (max.z - min.z) * (max.y - min.y)
+    val ySide = (max.z - min.z) * (max.x - min.x)
+    val zSide = (max.x - min.x) * (max.y - min.y)
+    return 2 * (xSide + ySide + zSide)
 }
 
 fun main() {
     fun part1(rawInput: List<String>): Int {
         val pointCloud = PointCloud()
-        for (line in rawInput)
-            pointCloud.add(Position3D.parse(line))
+        val points = rawInput.map { Position3D.parse(it) }
+        for (point in points)
+            pointCloud.add(point)
         return pointCloud.calculateSurfaceArea()
     }
 
     fun part2(rawInput: List<String>): Int {
-        return 0
+        val positivePointCloud = PointCloud()
+        val points = rawInput.map { Position3D.parse(it) }
+        for (point in points)
+            positivePointCloud.add(point)
+
+        // Calculate bounding box
+        var (minPosition, maxPosition) = positivePointCloud.boundingBox()
+        val margin = 1
+        val unitVector = Position3D(margin, margin, margin)
+        minPosition -= unitVector
+        maxPosition += unitVector
+
+        // Fill negative cloud
+        val negativePointCloud = PointCloud()
+        for (z in minPosition.z..maxPosition.z) {
+            for (y in minPosition.y..maxPosition.y) {
+                for (x in minPosition.x..maxPosition.x) {
+                    negativePointCloud.add(Position3D(x, y, z))
+                }
+            }
+        }
+
+        // Subtract real cloud from the negative
+        for (point in positivePointCloud.positions)
+            negativePointCloud.remove(point)
+
+        // Flood fill from the outside and remove
+        negativePointCloud.visitConnectedTo(minPosition)
+        negativePointCloud.removeUnvisited()
+        val negativeArea = negativePointCloud.calculateSurfaceArea()
+        check(Pair(Position3D(-1, -1, -1), Position3D(1, 1, 1)).calculateSurfaceArea() == 9 * 6)
+        val boxArea = Pair(minPosition, maxPosition).calculateSurfaceArea()
+        return negativeArea - boxArea
     }
 
     val sampleInput = readInput("sample_data", DAY_NUMBER)
@@ -74,9 +158,9 @@ fun main() {
 
     val part2SampleResult = part2(sampleInput)
     println(part2SampleResult)
-//    check(part2SampleResult == 58)
+    check(part2SampleResult == 58)
 
-//    val part2MainResult = part2(mainInput)
-//    println(part2MainResult)
-//    check(part2MainResult == 0)
+    val part2MainResult = part2(mainInput)
+    println(part2MainResult)
+    check(part2MainResult == 2468)
 }
