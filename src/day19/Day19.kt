@@ -31,7 +31,7 @@ data class RobotBlueprint(val name: String, val cost: Resources, val yield: Reso
     override fun toString(): String = "$name robot"
 }
 
-data class SimulationState(var resources: Resources, var yield: Resources)
+data class SimulationState(var resources: Resources, val yield: Resources)
 
 data class FactoryBlueprint(
     val id: Int,
@@ -74,7 +74,7 @@ private const val MINUTES = 24
 
 fun calculateGeodeOutputAfter24min(factoryBlueprint: FactoryBlueprint): Int {
     logln("Analyzing factory ${factoryBlueprint.id} blueprint")
-    val simulationState = SimulationState(Resources(), Resources(ore = 1))
+    var simulationState = SimulationState(Resources(), Resources(ore = 1))
 
     for (minute in 1..MINUTES) {
         logln("== Minute $minute ==")
@@ -83,14 +83,19 @@ fun calculateGeodeOutputAfter24min(factoryBlueprint: FactoryBlueprint): Int {
         val robotToBuy: RobotBlueprint? = selectRobotToBuy(simulationState, factoryBlueprint)
         if (robotToBuy != null) {
             logln("  Buying $robotToBuy for ${robotToBuy.cost}")
-            simulationState.resources -= robotToBuy.cost
-            simulationState.yield += robotToBuy.yield
+            simulationState = buyRobot(simulationState, robotToBuy)
         }
         logln("  Yield for next minute: ${simulationState.yield}")
         simulationState.resources += currentYield
     }
 
+    logln("Resources of blueprint ${factoryBlueprint.id} after 24min: ${simulationState.resources}")
+    logln("Yield of blueprint ${factoryBlueprint.id} after 24min: ${simulationState.yield}")
     return simulationState.resources.geode
+}
+
+fun buyRobot(simulationState: SimulationState, robotToBuy: RobotBlueprint): SimulationState {
+    return SimulationState(simulationState.resources - robotToBuy.cost, simulationState.yield + robotToBuy.yield)
 }
 
 fun selectRobotToBuy(simulationState: SimulationState, factoryBlueprint: FactoryBlueprint): RobotBlueprint? {
@@ -101,16 +106,44 @@ fun selectRobotToBuy(simulationState: SimulationState, factoryBlueprint: Factory
         factoryBlueprint.oreRobotBlueprint,
     )
 
-    val timeToBuild = robots.map { timeToBuild(simulationState, it) }
+    val timeToBuild = robots.map { timeToBuild(simulationState, it) }.zip(robots)
+    for ((est, robot) in timeToBuild) {
+        logln("    Time to build $robot: $est")
+    }
+
     if (simulationState.resources canBuy factoryBlueprint.geodeRobotBlueprint)
         return factoryBlueprint.geodeRobotBlueprint
-    if (simulationState.resources canBuy factoryBlueprint.obsidianRobotBlueprint)
-        return factoryBlueprint.obsidianRobotBlueprint
-    if (simulationState.resources canBuy factoryBlueprint.clayRobotBlueprint)
-        return factoryBlueprint.clayRobotBlueprint
-    if (simulationState.resources canBuy factoryBlueprint.oreRobotBlueprint)
-        return factoryBlueprint.oreRobotBlueprint
+
+    if (simulationState.resources canBuy factoryBlueprint.obsidianRobotBlueprint) {
+        if (!buyingDelays(simulationState, factoryBlueprint.obsidianRobotBlueprint, factoryBlueprint.geodeRobotBlueprint))
+            return factoryBlueprint.obsidianRobotBlueprint
+    }
+
+    if (simulationState.resources canBuy factoryBlueprint.clayRobotBlueprint) {
+        if (!buyingDelays(simulationState, factoryBlueprint.clayRobotBlueprint, factoryBlueprint.geodeRobotBlueprint) &&
+            !buyingDelays(simulationState, factoryBlueprint.clayRobotBlueprint, factoryBlueprint.obsidianRobotBlueprint))
+            return factoryBlueprint.clayRobotBlueprint
+    }
+
+    if (simulationState.resources canBuy factoryBlueprint.oreRobotBlueprint) {
+        if (!buyingDelays(simulationState, factoryBlueprint.oreRobotBlueprint, factoryBlueprint.geodeRobotBlueprint) &&
+            !buyingDelays(simulationState, factoryBlueprint.oreRobotBlueprint, factoryBlueprint.obsidianRobotBlueprint) &&
+            !buyingDelays(simulationState, factoryBlueprint.oreRobotBlueprint, factoryBlueprint.clayRobotBlueprint))
+            return factoryBlueprint.oreRobotBlueprint
+    }
     return null
+}
+
+fun buyingDelays(
+    simulationState: SimulationState,
+    targetRobot: RobotBlueprint,
+    dependentRobot: RobotBlueprint
+): Boolean {
+    val timeToBuildBeforeBuying = timeToBuild(simulationState, dependentRobot) ?: return false
+    val stateAfterBuying = buyRobot(simulationState, targetRobot)
+    val timeToBuildAfterBuying = timeToBuild(stateAfterBuying, dependentRobot)!!
+    logln("     Time to build $dependentRobot after buying $targetRobot: $timeToBuildBeforeBuying --> $timeToBuildAfterBuying")
+    return timeToBuildAfterBuying > timeToBuildBeforeBuying
 }
 
 fun timeToBuild(simulationState: SimulationState, robot: RobotBlueprint): Int? {
