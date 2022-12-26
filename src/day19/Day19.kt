@@ -3,7 +3,9 @@ package day19
 import logEnabled
 import logln
 import readInput
+import java.util.PriorityQueue
 import kotlin.math.ceil
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val DAY_NUMBER = 19
@@ -31,7 +33,11 @@ data class RobotBlueprint(val name: String, val cost: Resources, val yield: Reso
     override fun toString(): String = "$name robot"
 }
 
-data class SimulationState(var resources: Resources, val yield: Resources)
+data class SimulationState(val resources: Resources, val yield: Resources, val minutesLeft: Int) : Comparable<SimulationState> {
+    override fun compareTo(other: SimulationState): Int {
+        return minutesLeft.compareTo(other.minutesLeft)
+    }
+}
 
 data class FactoryBlueprint(
     val id: Int,
@@ -39,7 +45,17 @@ data class FactoryBlueprint(
     val clayRobotBlueprint: RobotBlueprint,
     val obsidianRobotBlueprint: RobotBlueprint,
     val geodeRobotBlueprint: RobotBlueprint
-)
+) {
+    val maxYield: Resources
+
+    init {
+        val robots = listOf(oreRobotBlueprint, clayRobotBlueprint, obsidianRobotBlueprint, geodeRobotBlueprint)
+        val maxOreYield = robots.maxOf { it.cost.ore }
+        val maxClayYield = robots.maxOf { it.cost.clay }
+        val maxObsidianYield = robots.maxOf { it.cost.obsidian }
+        maxYield = Resources(maxOreYield, maxClayYield, maxObsidianYield)
+    }
+}
 
 fun parseFactoryBlueprint(line: String): FactoryBlueprint {
     val (id, oreRobotOreCost, clayRobotOreCost, obsidianRobotOreCost, obsidianRobotClayCost, geodeRobotOreCost, geodeRobotObsidianCost) =
@@ -72,113 +88,63 @@ fun parseFactoryBlueprint(line: String): FactoryBlueprint {
 
 private const val MINUTES = 24
 
-fun calculateGeodeOutputAfter24min(factoryBlueprint: FactoryBlueprint): Int {
-    logln("Analyzing factory ${factoryBlueprint.id} blueprint")
-    var simulationState = SimulationState(Resources(), Resources(ore = 1))
-
-    for (minute in 1..MINUTES) {
-        logln("== Minute $minute ==")
-        logln("  Current state: ${simulationState.resources}")
-        val currentYield = simulationState.yield
-        val robotToBuy: RobotBlueprint? = selectRobotToBuy(simulationState, factoryBlueprint)
-        if (robotToBuy != null) {
-            logln("  Buying $robotToBuy for ${robotToBuy.cost}")
-            simulationState = buyRobot(simulationState, robotToBuy)
+fun simulate(factoryBlueprint: FactoryBlueprint): SimulationState {
+    val startState = SimulationState(Resources(), Resources(ore = 1), MINUTES)
+    //val queue = ArrayDeque<SimulationState>().apply { add(startState) }
+    val queue = PriorityQueue<SimulationState>().apply { add(startState) }
+    var bestState = startState
+    while (queue.isNotEmpty()) {
+        //val state = queue.removeFirst()
+        val state = queue.remove()
+        if (state.minutesLeft == 0) {
+            if (bestState.resources.geode < state.resources.geode) {
+                logln("Found better state with ${state.resources.geode} output")
+                bestState = state
+            }
         }
-        logln("  Yield for next minute: ${simulationState.yield}")
-        simulationState.resources += currentYield
+        else
+            queue.addAll(possibleStatesFrom(factoryBlueprint, state))
+    }
+    return bestState
+}
+
+fun possibleStatesFrom(factoryBlueprint: FactoryBlueprint, simulationState: SimulationState): List<SimulationState> {
+    if (simulationState.minutesLeft <= 0)
+        return listOf() // No more time to simulate
+
+    val possibleStates = mutableListOf(simulationState) // Do not buy anything
+    if (simulationState.resources canBuy factoryBlueprint.geodeRobotBlueprint) {
+        possibleStates.clear()
+        possibleStates.add(buyRobot(simulationState, factoryBlueprint.geodeRobotBlueprint))
+    }
+    else {
+        if (simulationState.resources canBuy factoryBlueprint.obsidianRobotBlueprint && simulationState.yield.obsidian < factoryBlueprint.maxYield.obsidian)
+            possibleStates.add(buyRobot(simulationState, factoryBlueprint.obsidianRobotBlueprint))
+
+        if (simulationState.resources canBuy factoryBlueprint.clayRobotBlueprint && simulationState.yield.clay < factoryBlueprint.maxYield.clay)
+            possibleStates.add(buyRobot(simulationState, factoryBlueprint.clayRobotBlueprint))
+
+        if (simulationState.resources canBuy factoryBlueprint.oreRobotBlueprint && simulationState.yield.ore < factoryBlueprint.maxYield.ore)
+            possibleStates.add(buyRobot(simulationState, factoryBlueprint.oreRobotBlueprint))
     }
 
-    logln("Resources of blueprint ${factoryBlueprint.id} after 24min: ${simulationState.resources}")
-    logln("Yield of blueprint ${factoryBlueprint.id} after 24min: ${simulationState.yield}")
-    return simulationState.resources.geode
+    return possibleStates.map { state -> SimulationState(state.resources + simulationState.yield, state.yield, simulationState.minutesLeft - 1) }
 }
 
 fun buyRobot(simulationState: SimulationState, robotToBuy: RobotBlueprint): SimulationState {
-    return SimulationState(simulationState.resources - robotToBuy.cost, simulationState.yield + robotToBuy.yield)
-}
-
-fun selectRobotToBuy(simulationState: SimulationState, factoryBlueprint: FactoryBlueprint): RobotBlueprint? {
-    val robots = arrayOf(
-        factoryBlueprint.geodeRobotBlueprint,
-        factoryBlueprint.obsidianRobotBlueprint,
-        factoryBlueprint.clayRobotBlueprint,
-        factoryBlueprint.oreRobotBlueprint,
-    )
-
-    val timeToBuild = robots.map { timeToBuild(simulationState, it) }.zip(robots)
-    for ((est, robot) in timeToBuild) {
-        logln("    Time to build $robot: $est")
-    }
-
-    if (simulationState.resources canBuy factoryBlueprint.geodeRobotBlueprint)
-        return factoryBlueprint.geodeRobotBlueprint
-
-    if (simulationState.resources canBuy factoryBlueprint.obsidianRobotBlueprint) {
-        if (!buyingDelays(simulationState, factoryBlueprint.obsidianRobotBlueprint, factoryBlueprint.geodeRobotBlueprint))
-            return factoryBlueprint.obsidianRobotBlueprint
-    }
-
-    if (simulationState.resources canBuy factoryBlueprint.clayRobotBlueprint) {
-        if (!buyingDelays(simulationState, factoryBlueprint.clayRobotBlueprint, factoryBlueprint.geodeRobotBlueprint) &&
-            !buyingDelays(simulationState, factoryBlueprint.clayRobotBlueprint, factoryBlueprint.obsidianRobotBlueprint))
-            return factoryBlueprint.clayRobotBlueprint
-    }
-
-    if (simulationState.resources canBuy factoryBlueprint.oreRobotBlueprint) {
-        if (!buyingDelays(simulationState, factoryBlueprint.oreRobotBlueprint, factoryBlueprint.geodeRobotBlueprint) &&
-            !buyingDelays(simulationState, factoryBlueprint.oreRobotBlueprint, factoryBlueprint.obsidianRobotBlueprint) &&
-            !buyingDelays(simulationState, factoryBlueprint.oreRobotBlueprint, factoryBlueprint.clayRobotBlueprint))
-            return factoryBlueprint.oreRobotBlueprint
-    }
-    return null
-}
-
-fun buyingDelays(
-    simulationState: SimulationState,
-    targetRobot: RobotBlueprint,
-    dependentRobot: RobotBlueprint
-): Boolean {
-    val timeToBuildBeforeBuying = timeToBuild(simulationState, dependentRobot) ?: return false
-    val stateAfterBuying = buyRobot(simulationState, targetRobot)
-    val timeToBuildAfterBuying = timeToBuild(stateAfterBuying, dependentRobot)!!
-    logln("     Time to build $dependentRobot after buying $targetRobot: $timeToBuildBeforeBuying --> $timeToBuildAfterBuying")
-    return timeToBuildAfterBuying > timeToBuildBeforeBuying
-}
-
-fun timeToBuild(simulationState: SimulationState, robot: RobotBlueprint): Int? {
-    val oreTime = timeToCollect(simulationState, robot) { ore }
-    val clayTime = timeToCollect(simulationState, robot) { clay }
-    val obsidianTime = timeToCollect(simulationState, robot) { obsidian }
-
-    val waitTimes = arrayOf(oreTime, clayTime, obsidianTime)
-    if (waitTimes.any { it == null })
-        return null // At least one resource collecting robot is missing
-    return waitTimes.maxOfOrNull { it!! }
-}
-
-fun timeToCollect(simulationState: SimulationState, robot: RobotBlueprint, selector: Resources.() -> Int): Int? {
-    val resourcePresent = selector(simulationState.resources)
-    val resourceRequired = selector(robot.cost)
-    if (resourcePresent >= resourceRequired)
-        return 0 // Resource already in stock
-    val resourceYield = selector(simulationState.yield)
-    if (resourceYield == 0)
-        return null // No way to acquire resource yet
-    val resourceMissing = resourceRequired - resourcePresent
-    val minutesToMine = resourceMissing / resourceYield.toFloat()
-    return ceil(minutesToMine).roundToInt()
+    return SimulationState(simulationState.resources - robotToBuy.cost, simulationState.yield + robotToBuy.yield, simulationState.minutesLeft)
 }
 
 fun main() {
     fun part1(rawInput: List<String>): Int {
         var totalQuality = 0
         for (blueprint in rawInput.map { parseFactoryBlueprint(it) }) {
-            val blueprintQuality = blueprint.id * calculateGeodeOutputAfter24min(blueprint)
+            val bestState = simulate(blueprint)
+            val blueprintQuality = blueprint.id * bestState.resources.geode
             if (blueprint.id == 1)
                 check(blueprintQuality == 9)
             else if (blueprint.id == 2)
-                check(blueprintQuality == 12)
+                check(blueprintQuality == 2 * 12)
             totalQuality += blueprintQuality
         }
         return totalQuality
